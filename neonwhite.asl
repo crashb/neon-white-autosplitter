@@ -9,6 +9,8 @@ startup {
 
 start {
     if (current.levelId == vars.firstLevelId && current.levelId != old.levelId) {
+        // reset old level ID to the first level ID when restarting the run
+        vars.oldLevelId = vars.firstLevelId;
         return true;
     }
 }
