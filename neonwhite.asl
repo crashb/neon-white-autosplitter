@@ -4,28 +4,21 @@ state("Neon White") {
 
 startup {
     vars.firstLevelId = "id/TUT_MOVEMENT.unity";
-    vars.oldLevelId = vars.firstLevelId;
+}
+
+update {
+    if (string.IsNullOrEmpty(current.levelId))
+        current.levelId = old.levelId;
 }
 
 start {
-    if (current.levelId == vars.firstLevelId && current.levelId != old.levelId) {
-        // reset old level ID to the first level ID when restarting the run
-        vars.oldLevelId = vars.firstLevelId;
-        return true;
-    }
+    return old.levelId != current.levelId && current.levelId == vars.firstLevelId;
 }
 
 reset {
-    if (current.levelId == vars.firstLevelId && current.levelId != old.levelId) {
-        return true;
-    }
+    return old.levelId != current.levelId && current.levelId == vars.firstLevelId;
 }
 
 split {
-    // when restarting a level, the levelId is set to null for a brief instant,
-    // so only check against the actual old levelId instead of using old.levelId
-    if (current.levelId != vars.oldLevelId && current.levelId != null) {
-        vars.oldLevelId = current.levelId;
-        return true;
-    }
+    return old.levelId != current.levelId;
 }
