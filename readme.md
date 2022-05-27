@@ -4,6 +4,8 @@ The accompanying `neonwhite.asl` file is an autosplitter for Neon White. It make
 
 ## Important Information!!!
 
+* When using IGT, there may be small discrepancies between your level time in LiveSplit and your level time in the game (up to 2/100 of a second).
+    * These discrepancies are because of how the game keeps track of time internally.
 * The autosplitter assumes you are **NOT** playing on a new file. **Play on a save file with the 18 main missions already unlocked.**
 * The autosplitter uses both RTA ("Real Time Attack") and IGT ("In Game Time"). You can choose which one to compare in LiveSplit:
     * Right-click on LiveSplit > "Compare Against" > "Real Time" / "Game Time"
