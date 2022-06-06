@@ -26,7 +26,7 @@ gameTime {
         current.levelTime = old.levelTime;
     }
     
-    if (old.levelTime > current.levelTime) {
+    if (current.levelTime == -1 && old.levelTime != -1) {
         vars.totalTime += old.levelTime;
     }
 
