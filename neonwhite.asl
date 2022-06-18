@@ -1,28 +1,40 @@
 state("Neon White") {
     long levelPlaythroughMicroseconds : "UnityPlayer.dll", 0x199CDC0, 0x18, 0x40, 0x28, 0x48, 0x20;
     long levelRushMicroseconds : "UnityPlayer.dll", 0x1930010, 0x10, 0xD0, 0x8, 0x60, 0x50, 0x0, 0x1C0, 0x10, 0x20;
-    string255 levelId : "UnityPlayer.dll", 0x1A058E0, 0x48, 0x10, 0x18;
+    string255 levelId : "UnityPlayer.dll", 0x199CDC0, 0x18, 0x40, 0x28, 0x30, 0x20, 0x14;
+    string255 levelScene : "UnityPlayer.dll", 0x1A058E0, 0x48, 0x10, 0x18;
 }
 
 startup {
-    vars.FIRST_LEVEL_ID = "id/TUT_MOVEMENT.unity";
+    vars.LEVEL_RUSH_MENU_SCENE = "nu.unity";
+    // vars.FIRST_LEVEL_SCENE = "id/TUT_MOVEMENT.unity";
+    // vars.FIRST_LEVEL_SCENE = "id/SIDEQUEST_DODGER.unity";
+    vars.FIRST_LEVEL_SCENE = "id/SIDEQUEST_OBSTACLE_PISTOL.unity";
+    vars.includeCurrentLevel = true;  // flag which prevents doubling the time of the final rush level
 }
 
 update {
-    if (string.IsNullOrEmpty(current.levelId)) {
-        current.levelId = old.levelId;
-    }
-
-    // levelRushMicroseconds is set to 0 when loading; supress this for a clean timer,
+    // levelRushMicroseconds is set to 0 when loading; suppress this for a clean timer,
     // unless levelRushMicroseconds is actually zero. (i.e. we are on the first level)
-    if (current.levelRushMicroseconds == 0 && current.levelId != vars.FIRST_LEVEL_ID) {
+    if (current.levelRushMicroseconds == 0 && current.levelScene != vars.FIRST_LEVEL_SCENE) {
         current.levelRushMicroseconds = old.levelRushMicroseconds;
     }
 
     // levelRushMicroseconds is incremented by levelPlaythroughMicroseconds every level;
-    // if levelPlaythroughMicroseconds hasn't reset yet, supress this change.
-    if (current.levelRushMicroseconds == old.levelRushMicroseconds + current.levelPlaythroughMicroseconds) {
-        current.levelRushMicroseconds = old.levelRushMicroseconds;
+    // if levelPlaythroughMicroseconds hasn't reset yet, suppress this change.
+    if (
+        current.levelRushMicroseconds > old.levelRushMicroseconds &&
+        current.levelPlaythroughMicroseconds > 0
+    ) {
+        vars.includeCurrentLevel = false;
+    }
+
+    if (current.levelPlaythroughMicroseconds == -1 && !vars.includeCurrentLevel) {
+        vars.includeCurrentLevel = true;
+    }
+
+    if (!vars.includeCurrentLevel) {
+        current.levelPlaythroughMicroseconds = 0;
     }
 }
 
@@ -37,13 +49,18 @@ gameTime {
 }
 
 split {
-    return old.levelId != current.levelId;
+    return (
+        old.levelId != current.levelId || // normal split
+        (old.levelScene != current.levelScene && current.levelScene == vars.LEVEL_RUSH_MENU_SCENE)  // split when returning to menu
+    );
 }
 
+// levelId does not update when exiting to the main menu, so use levelScene to detect when to start
+// or reset the timer
 start {
-    return old.levelId != current.levelId && current.levelId == vars.FIRST_LEVEL_ID;
+    return old.levelScene != current.levelScene && current.levelScene == vars.FIRST_LEVEL_SCENE;
 }
 
 reset {
-    return old.levelId != current.levelId && current.levelId == vars.FIRST_LEVEL_ID;
+    return old.levelScene != current.levelScene && current.levelScene == vars.FIRST_LEVEL_SCENE;
 }
