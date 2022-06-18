@@ -7,16 +7,28 @@ state("Neon White") {
 
 startup {
     vars.LEVEL_RUSH_MENU_SCENE = "nu.unity";
-    // vars.FIRST_LEVEL_SCENE = "id/TUT_MOVEMENT.unity";
-    // vars.FIRST_LEVEL_SCENE = "id/SIDEQUEST_DODGER.unity";
-    vars.FIRST_LEVEL_SCENE = "id/SIDEQUEST_OBSTACLE_PISTOL.unity";
+    vars.FIRST_LEVEL_SCENES = new string[4]{
+        "id/TUT_MOVEMENT.unity",  // White's / Mikey's Rush
+        "id/SIDEQUEST_DODGER.unity",  // Violet's Rush
+        "id/SIDEQUEST_OBSTACLE_PISTOL.unity",  // Red's Rush
+        "id/SIDEQUEST_SUNSET_FLIP_POWERBOMB.unity",  // Yellow's Rush
+    };
+    vars.IsFirstLevelScene = (Func<string, bool>)((string levelScene) => {
+        foreach (string firstLevelScene in vars.FIRST_LEVEL_SCENES) {
+            if (firstLevelScene == levelScene) {
+                return true;
+            }
+        }
+        return false;
+    });
+
     vars.includeCurrentLevel = true;  // flag which prevents doubling the time of the final rush level
 }
 
 update {
     // levelRushMicroseconds is set to 0 when loading; suppress this for a clean timer,
     // unless levelRushMicroseconds is actually zero. (i.e. we are on the first level)
-    if (current.levelRushMicroseconds == 0 && current.levelScene != vars.FIRST_LEVEL_SCENE) {
+    if (current.levelRushMicroseconds == 0 && !vars.IsFirstLevelScene(current.levelScene)) {
         current.levelRushMicroseconds = old.levelRushMicroseconds;
     }
 
@@ -58,9 +70,9 @@ split {
 // levelId does not update when exiting to the main menu, so use levelScene to detect when to start
 // or reset the timer
 start {
-    return old.levelScene != current.levelScene && current.levelScene == vars.FIRST_LEVEL_SCENE;
+    return old.levelScene != current.levelScene && vars.IsFirstLevelScene(current.levelScene);
 }
 
 reset {
-    return old.levelScene != current.levelScene && current.levelScene == vars.FIRST_LEVEL_SCENE;
+    return old.levelScene != current.levelScene && vars.IsFirstLevelScene(current.levelScene);
 }
