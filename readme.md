@@ -16,7 +16,7 @@ The accompanying `neonwhite.asl` file is an autosplitter for Neon White. This au
 
 There are two ways to install the autosplitter: **automated** and **manual**.
 
-### Automated Install (DOES NOT WORK CURRENTLY)
+### Automated Install
 
 Here is how to automatically add the Neon White autosplitter to your LiveSplit setup:
 1. Right-click on LiveSplit, then select "Edit Splits..."
