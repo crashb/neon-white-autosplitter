@@ -8,7 +8,7 @@ state("Neon White") {
 startup {
     vars.LEVEL_RUSH_MENU_SCENE = "nu.unity";
     vars.FIRST_LEVEL_SCENES = new string[4]{
-        "id/TUT_MOVEMENT.unity",  // White's / Mikey's Rush
+        "id/TUT_MOVEMENT.unity",  // White's & Mikey's Rush
         "id/SIDEQUEST_DODGER.unity",  // Violet's Rush
         "id/SIDEQUEST_OBSTACLE_PISTOL.unity",  // Red's Rush
         "id/SIDEQUEST_SUNSET_FLIP_POWERBOMB.unity",  // Yellow's Rush
@@ -26,6 +26,11 @@ startup {
 }
 
 update {
+    // level ID can randomly be set to a null string for a single frame, causing false splits 
+    if (string.IsNullOrEmpty(current.levelId)) {
+        current.levelId = old.levelId;
+    }
+
     // levelRushMicroseconds is set to 0 when loading; suppress this for a clean timer,
     // unless levelRushMicroseconds is actually zero. (i.e. we are on the first level)
     if (current.levelRushMicroseconds == 0 && !vars.IsFirstLevelScene(current.levelScene)) {
@@ -41,6 +46,7 @@ update {
         vars.includeCurrentLevel = false;
     }
 
+    // if we have started a new LevelPlaythrough then include the current level's timer
     if (current.levelPlaythroughMicroseconds == -1 && !vars.includeCurrentLevel) {
         vars.includeCurrentLevel = true;
     }
