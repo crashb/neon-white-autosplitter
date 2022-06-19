@@ -37,6 +37,8 @@ Here is how to manually add the Neon White autosplitter to your LiveSplit setup:
 
 For your convenience, the [`/livesplit`](https://github.com/crashb/neon-white-autosplitter/tree/main/livesplit) folder of this repository contains empty split files which are pre-populated with split names.
 
+**NOTE:** The split files for White's Rush and Mikey's Rush both use LiveSplit's "subsplit" functionality, so that each individual level is a subsplit and each mission is a "big" split. You will need to add the "Subsplit" component to your layout under "List" > "Subsplits".
+
 ## Performing a Run
 
 Here is how to perform a run with the autosplitter:
