@@ -7,14 +7,26 @@ state("Neon White") {
 
 startup {
     vars.LEVEL_RUSH_MENU_SCENE = "nu.unity";
-    vars.FIRST_LEVEL_SCENES = new string[4]{
-        "id/TUT_MOVEMENT.unity",  // White's & Mikey's Rush
-        "id/SIDEQUEST_DODGER.unity",  // Violet's Rush
-        "id/SIDEQUEST_OBSTACLE_PISTOL.unity",  // Red's Rush
-        "id/SIDEQUEST_SUNSET_FLIP_POWERBOMB.unity",  // Yellow's Rush
+    vars.FIRST_LEVEL_IDS = new string[4]{
+        "TUT_MOVEMENT",  // White's & Mikey's Rush
+        "SIDEQUEST_DODGER",  // Violet's Rush
+        "SIDEQUEST_OBSTACLE_PISTOL",  // Red's Rush
+        "SIDEQUEST_SUNSET_FLIP_POWERBOMB",  // Yellow's Rush
     };
+    vars.LevelIdToScene = (Func<string, string>)((string levelId) => {
+        return "id/" + levelId + ".unity";
+    });
+    vars.IsFirstLevelId = (Func<string, bool>)((string levelId) => {
+        foreach (string firstLevelId in vars.FIRST_LEVEL_IDS) {
+            if (firstLevelId == levelId) {
+                return true;
+            }
+        }
+        return false;
+    });
     vars.IsFirstLevelScene = (Func<string, bool>)((string levelScene) => {
-        foreach (string firstLevelScene in vars.FIRST_LEVEL_SCENES) {
+        foreach (string firstLevelId in vars.FIRST_LEVEL_IDS) {
+            string firstLevelScene = vars.LevelIdToScene(firstLevelId);
             if (firstLevelScene == levelScene) {
                 return true;
             }
@@ -68,8 +80,11 @@ gameTime {
 
 split {
     return (
-        old.levelId != current.levelId || // normal split
-        (old.levelScene != current.levelScene && current.levelScene == vars.LEVEL_RUSH_MENU_SCENE)  // split when returning to menu
+        (  // normal split
+            old.levelId != current.levelId &&
+            !vars.IsFirstLevelId(current.levelId)  // suppress split when restarting a Level Rush
+        ) ||  // or, split when returning to the Level Rush menu
+        (old.levelScene != current.levelScene && current.levelScene == vars.LEVEL_RUSH_MENU_SCENE)
     );
 }
 
