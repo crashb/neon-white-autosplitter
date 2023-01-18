@@ -1,99 +1,97 @@
 state("Neon White") {
-    long levelPlaythroughMicroseconds : "UnityPlayer.dll", 0x199CDC0, 0x18, 0x40, 0x28, 0x48, 0x20;
-    long levelRushMicroseconds : "UnityPlayer.dll", 0x1930010, 0x10, 0xD0, 0x8, 0x60, 0x50, 0x0, 0x1C0, 0x10, 0x20;
-    string255 levelId : "UnityPlayer.dll", 0x199CDC0, 0x18, 0x40, 0x28, 0x30, 0x20, 0x14;
+    // This pointer path is valid whether or not mods are loaded.
     string255 levelScene : "UnityPlayer.dll", 0x1A058E0, 0x48, 0x10, 0x18;
 }
 
-startup {
-    vars.LEVEL_RUSH_MENU_SCENE = "nu.unity";
-    vars.FIRST_LEVEL_IDS = new string[4]{
-        "TUT_MOVEMENT",  // White's & Mikey's Rush
-        "SIDEQUEST_DODGER",  // Violet's Rush
-        "SIDEQUEST_OBSTACLE_PISTOL",  // Red's Rush
-        "SIDEQUEST_SUNSET_FLIP_POWERBOMB",  // Yellow's Rush
-    };
-    vars.LevelIdToScene = (Func<string, string>)((string levelId) => {
-        return "id/" + levelId + ".unity";
-    });
-    vars.IsFirstLevelId = (Func<string, bool>)((string levelId) => {
-        foreach (string firstLevelId in vars.FIRST_LEVEL_IDS) {
-            if (firstLevelId == levelId) {
-                return true;
-            }
-        }
-        return false;
-    });
-    vars.IsFirstLevelScene = (Func<string, bool>)((string levelScene) => {
-        foreach (string firstLevelId in vars.FIRST_LEVEL_IDS) {
-            string firstLevelScene = vars.LevelIdToScene(firstLevelId);
-            if (firstLevelScene == levelScene) {
-                return true;
-            }
-        }
-        return false;
-    });
+init {
+    print("Starting Neon White autosplitter..");
 
-    vars.includeCurrentLevel = true;  // flag which prevents doubling the time of the final rush level
+    vars.firstLvls = new HashSet<string> {
+        "id/TUT_MOVEMENT.unity", // White's & Mikey's Rush
+        "id/SIDEQUEST_DODGER.unity", // Violet's Rush
+        "id/SIDEQUEST_OBSTACLE_PISTOL.unity", // Red's Rush
+        "id/SIDEQUEST_SUNSET_FLIP_POWERBOMB.unity", // Yellow's Rush
+    };
+
+    vars.introScenes = new HashSet<string> {
+        "nu.unity", // Main Menu
+        "s/IntroCards.unity", // Intro
+    };
+
+    vars.ignoredScenes = new HashSet<string> {
+        "yworld/GodTemple_Environment_Base.unity",
+        "GodTemple_InteriorLighting_Test.unity",
+        "yworld/HandOfGod_Environment_Base_LOOKDEV.unity",
+        "terlife/Afterlife_Environment_Green.unity",
+    };
+    
+    vars.watchers = new MemoryWatcherList
+    {
+        new MemoryWatcher<long>(new DeepPointer("UnityPlayer.dll", 0x199CDC0, 0x18, 0xB8, 0x38, 0x48, 0x20)) { Name = "playthroughTime" },
+        new MemoryWatcher<long>(new DeepPointer("UnityPlayer.dll", 0x199CDC0, 0x18, 0xB8, 0x38, 0x48, 0x30)) { Name = "rushTimeOffset" },
+    };
+    
+    vars.modsChecked = false;
 }
 
 update {
-    // level ID can randomly be set to a null string for a single frame, causing false splits 
-    if (string.IsNullOrEmpty(current.levelId)) {
-        current.levelId = old.levelId;
+    if (!vars.modsChecked && old.levelScene == "s/IntroCards.unity" && current.levelScene == "nu.unity") {
+        if (modules.Any(m => m.ModuleName == "Bootstrap.dll")) {
+            print("Mods found.");
+            vars.watchers = new MemoryWatcherList
+            {
+                new MemoryWatcher<long>(new DeepPointer("UnityPlayer.dll", 0x1A058E0, 0x128, 0x8, 0x38, 0x60, 0x48, 0x20)) { Name = "playthroughTime" },
+                new MemoryWatcher<long>(new DeepPointer("UnityPlayer.dll", 0x1A058E0, 0x128, 0x8, 0x38, 0x60, 0x48, 0x30)) { Name = "rushTimeOffset" },
+            };
+        } else {
+            print("No mods found.");
+        }
+        vars.modsChecked = true;
     }
 
-    // levelRushMicroseconds is set to 0 when loading; suppress this for a clean timer,
-    // unless levelRushMicroseconds is actually zero. (i.e. we are on the first level)
-    if (current.levelRushMicroseconds == 0 && !vars.IsFirstLevelScene(current.levelScene)) {
-        current.levelRushMicroseconds = old.levelRushMicroseconds;
-    }
+    vars.watchers.UpdateAll(game);
 
-    // levelRushMicroseconds is incremented by levelPlaythroughMicroseconds every level;
-    // if levelPlaythroughMicroseconds hasn't reset yet, suppress this change.
-    if (
-        current.levelRushMicroseconds > old.levelRushMicroseconds &&
-        current.levelPlaythroughMicroseconds > 0
-    ) {
-        vars.includeCurrentLevel = false;
-    }
+    current.playthroughTime = vars.watchers["playthroughTime"].Current;
+    current.rushTimeOffset = vars.watchers["rushTimeOffset"].Current;
 
-    // if we have started a new LevelPlaythrough then include the current level's timer
-    if (current.levelPlaythroughMicroseconds == -1 && !vars.includeCurrentLevel) {
-        vars.includeCurrentLevel = true;
-    }
-
-    if (!vars.includeCurrentLevel) {
-        current.levelPlaythroughMicroseconds = 0;
-    }
+    if (string.IsNullOrEmpty(current.levelScene) || vars.ignoredScenes.Contains(current.levelScene))
+        current.levelScene = old.levelScene;
 }
 
-isLoading {
-    return true;
+start {
+    return old.levelScene != current.levelScene  
+    && old.levelScene != "id/Heaven_Environment.unity" // make sure the mission was not started from Job Archive
+    && vars.firstLvls.Contains(current.levelScene);
+}
+
+split {
+    if (old.levelScene != current.levelScene
+        && !vars.introScenes.Contains(current.levelScene)
+        && !vars.ignoredScenes.Contains(current.levelScene)
+        && !vars.firstLvls.Contains(current.levelScene))
+        {
+            return true;
+        }
+}
+
+reset {
+    return old.levelScene != current.levelScene 
+        && vars.firstLvls.Contains(current.levelScene) 
+        || current.levelScene == "nu.unity";
 }
 
 gameTime {
-    long totalMicroseconds = current.levelRushMicroseconds + current.levelPlaythroughMicroseconds;
+    if (current.rushTimeOffset == 0 
+        && !vars.firstLvls.Contains(current.levelScene)
+        || current.playthroughTime == -1) {
+        return;
+    }
+
+    long totalMicroseconds = current.rushTimeOffset + current.playthroughTime;
     long totalMilliseconds = totalMicroseconds / 1000;
     return TimeSpan.FromMilliseconds(totalMilliseconds);
 }
 
-split {
-    return (
-        (  // normal split
-            old.levelId != current.levelId &&
-            !vars.IsFirstLevelId(current.levelId)  // suppress split when restarting a Level Rush
-        ) ||  // or, split when returning to the Level Rush menu
-        (old.levelScene != current.levelScene && current.levelScene == vars.LEVEL_RUSH_MENU_SCENE)
-    );
-}
-
-// levelId does not update when exiting to the main menu, so use levelScene to detect when to start
-// or reset the timer
-start {
-    return old.levelScene != current.levelScene && vars.IsFirstLevelScene(current.levelScene);
-}
-
-reset {
-    return old.levelScene != current.levelScene && vars.IsFirstLevelScene(current.levelScene);
+isLoading {
+    return true;
 }
