@@ -1,99 +1,133 @@
-state("Neon White") {
-    long levelPlaythroughMicroseconds : "UnityPlayer.dll", 0x199CDC0, 0x18, 0x40, 0x28, 0x48, 0x20;
-    long levelRushMicroseconds : "UnityPlayer.dll", 0x1930010, 0x10, 0xD0, 0x8, 0x60, 0x50, 0x0, 0x1C0, 0x10, 0x20;
-    string255 levelId : "UnityPlayer.dll", 0x199CDC0, 0x18, 0x40, 0x28, 0x30, 0x20, 0x14;
-    string255 levelScene : "UnityPlayer.dll", 0x1A058E0, 0x48, 0x10, 0x18;
-}
+state("Neon White") {}
 
 startup {
-    vars.LEVEL_RUSH_MENU_SCENE = "nu.unity";
-    vars.FIRST_LEVEL_IDS = new string[4]{
-        "TUT_MOVEMENT",  // White's & Mikey's Rush
-        "SIDEQUEST_DODGER",  // Violet's Rush
-        "SIDEQUEST_OBSTACLE_PISTOL",  // Red's Rush
-        "SIDEQUEST_SUNSET_FLIP_POWERBOMB",  // Yellow's Rush
+    Assembly.Load(File.ReadAllBytes("Components/asl-help")).CreateInstance("Unity");
+    vars.Helper.AlertLoadless();
+    vars.levelPlaythroughMicrosecondsAccumulator = 0l;
+    dynamic[,] _settings = 
+    {
+        { null, "levelRush", true, "Level Rush"},
+            {"levelRush", "lr-st", true, "Start timer when loading into the first level."},
+            {"levelRush", "lr-re", true, "Reset timer when exiting or restarting rush."},
+            {"levelRush", "lr-sp-l", true, "Split timer when completing a level."},
+            {"levelRush", "lr-sp-c", true, "Split timer when level rush completed."},
+        { null, "chapterRush", false, "Chapter Rush"},
+            {"chapterRush", "cr-st", true, "Start timer when loading into a level from level select."},
+            {"chapterRush", "cr-re", false, "Reset timer when exiting back to level select."},
+            {"chapterRush", "cr-sp", true, "Split timer when completing a level."},
+        { null, "newGame", false, "New Game"},
+            {"newGame", "ng-st", true, "Start timer when pressing \"New Game\"."},
+            {"newGame", "ng-re", false, "Reset timer when exiting to the main menu."},
+            {"newGame", "ng-sp-l", true, "Split timer when completing a level."},
+            //TODO {"newGame", "ng-sp-g", true, "Split timer when collecting a gift."},
+            {"newGame", "ng-sp-c", true, "Split timer when entering credits."}
     };
-    vars.LevelIdToScene = (Func<string, string>)((string levelId) => {
-        return "id/" + levelId + ".unity";
-    });
-    vars.IsFirstLevelId = (Func<string, bool>)((string levelId) => {
-        foreach (string firstLevelId in vars.FIRST_LEVEL_IDS) {
-            if (firstLevelId == levelId) {
-                return true;
-            }
-        }
-        return false;
-    });
-    vars.IsFirstLevelScene = (Func<string, bool>)((string levelScene) => {
-        foreach (string firstLevelId in vars.FIRST_LEVEL_IDS) {
-            string firstLevelScene = vars.LevelIdToScene(firstLevelId);
-            if (firstLevelScene == levelScene) {
-                return true;
-            }
-        }
-        return false;
-    });
-
-    vars.includeCurrentLevel = true;  // flag which prevents doubling the time of the final rush level
+    vars.Helper.Settings.CreateCustom(_settings, 4, 1, 2, 3);
 }
 
-update {
-    // level ID can randomly be set to a null string for a single frame, causing false splits 
-    if (string.IsNullOrEmpty(current.levelId)) {
-        current.levelId = old.levelId;
-    }
+init 
+{
+    vars.Helper.TryLoad = (Func<dynamic, bool>)(mono =>
+    {
+        vars.Helper["levelRushOffsetMicroseconds"] = mono.Make<long>("Game", 1, "_instance", "_currentPlaythrough", "m_levelRushOffsetMicroseconds");
+        vars.Helper["levelRushMicroseconds"] = mono.Make<long>("LevelRush", "m_currentLevelRush", "currentTimerMicroseconds");
+        vars.Helper["levelPlaythroughMicroseconds"] = mono.Make<long>("Game", 1, "_instance", "_currentPlaythrough", "microseconds");
+        vars.Helper["levelRushIndex"] = mono.Make<int>("LevelRush", "m_currentLevelRush", "currentLevelIndex");
 
-    // levelRushMicroseconds is set to 0 when loading; suppress this for a clean timer,
-    // unless levelRushMicroseconds is actually zero. (i.e. we are on the first level)
-    if (current.levelRushMicroseconds == 0 && !vars.IsFirstLevelScene(current.levelScene)) {
-        current.levelRushMicroseconds = old.levelRushMicroseconds;
-    }
-
-    // levelRushMicroseconds is incremented by levelPlaythroughMicroseconds every level;
-    // if levelPlaythroughMicroseconds hasn't reset yet, suppress this change.
-    if (
-        current.levelRushMicroseconds > old.levelRushMicroseconds &&
-        current.levelPlaythroughMicroseconds > 0
-    ) {
-        vars.includeCurrentLevel = false;
-    }
-
-    // if we have started a new LevelPlaythrough then include the current level's timer
-    if (current.levelPlaythroughMicroseconds == -1 && !vars.includeCurrentLevel) {
-        vars.includeCurrentLevel = true;
-    }
-
-    if (!vars.includeCurrentLevel) {
-        current.levelPlaythroughMicroseconds = 0;
-    }
+        vars.Helper["filePlayTimeMicroseconds"] = mono.Make<long>("GameDataManager", "saveData", "_playTime");
+        vars.Helper["mainMenuState"] = mono.Make<int>("MainMenu", "_instance", "_currentState");
+        return true;
+    });
 }
 
-isLoading {
+isLoading
+{
     return true;
 }
 
-gameTime {
-    long totalMicroseconds = current.levelRushMicroseconds + current.levelPlaythroughMicroseconds;
-    long totalMilliseconds = totalMicroseconds / 1000;
-    return TimeSpan.FromMilliseconds(totalMilliseconds);
+gameTime
+{
+    if (settings["levelRush"])
+    {
+        if (current.levelPlaythroughMicroseconds > 0)
+        {
+            return TimeSpan.FromMilliseconds((current.levelRushOffsetMicroseconds + current.levelPlaythroughMicroseconds) / 1000);
+        }
+        else
+        {
+            return TimeSpan.FromMilliseconds(current.levelRushMicroseconds / 1000);
+        }
+    }
+    else if (settings["chapterRush"])
+    {
+        if (current.levelPlaythroughMicroseconds < old.levelPlaythroughMicroseconds && old.mainMenuState == 0) // MainMenu.State.None
+        {
+            // adds the time when the player attempts but doesn't beat a level
+            vars.levelPlaythroughMicrosecondsAccumulator += current.levelPlaythroughMicroseconds;
+        }
+
+        if (current.mainMenuState == 10) // MainMenu.State.Results
+        {
+            // adds the time when the player beats a level
+            if (old.mainMenuState != 10) // MainMenu.State.Results
+            {
+                vars.levelPlaythroughMicrosecondsAccumulator += old.levelPlaythroughMicroseconds;
+            }
+            return TimeSpan.FromMilliseconds(vars.levelPlaythroughMicrosecondsAccumulator / 1000);
+        }
+        else
+        {
+            return TimeSpan.FromMilliseconds((vars.levelPlaythroughMicrosecondsAccumulator + current.levelPlaythroughMicroseconds) / 1000);
+        }
+    }
+    else if (settings["newGame"])
+    {
+        return TimeSpan.FromMilliseconds(current.filePlayTimeMicroseconds / 1000);
+    }
 }
 
-split {
-    return (
-        (  // normal split
-            old.levelId != current.levelId &&
-            !vars.IsFirstLevelId(current.levelId)  // suppress split when restarting a Level Rush
-        ) ||  // or, split when returning to the Level Rush menu
-        (old.levelScene != current.levelScene && current.levelScene == vars.LEVEL_RUSH_MENU_SCENE)
-    );
+split
+{
+    if ((settings["lr-sp-l"] || settings["cr-sp"] || settings["ng-sp-l"]) && old.mainMenuState != current.mainMenuState && current.mainMenuState == 10) // MainMenu.State.Results
+    {
+        return true;
+    }
+    if (settings["lr-sp-c"] && current.mainMenuState == 27) // MainMenu.State.LevelRushComplete
+    {
+        return true;
+    }
+    if (settings["ng-sp-c"] && current.mainMenuState == 30) // MainMenu.State.Credits
+    {
+        return true;
+    }
+
 }
 
-// levelId does not update when exiting to the main menu, so use levelScene to detect when to start
-// or reset the timer
-start {
-    return old.levelScene != current.levelScene && vars.IsFirstLevelScene(current.levelScene);
+start
+{
+    if (settings["lr-st"] || settings["cr-st"])
+    {
+        vars.levelPlaythroughMicrosecondsAccumulator = 0l;
+        return current.mainMenuState != old.mainMenuState && old.mainMenuState == 9; // MainMenu.State.Staging
+    }
+    if (settings["ng-st"])
+    {
+        return current.filePlayTimeMicroseconds != old.filePlayTimeMicroseconds && old.filePlayTimeMicroseconds == 0l;
+    }
 }
 
-reset {
-    return old.levelScene != current.levelScene && vars.IsFirstLevelScene(current.levelScene);
+reset
+{
+    if (settings["lr-re"])
+    {
+        return current.levelRushIndex < old.levelRushIndex || current.mainMenuState == 26; // MainMenu.State.LevelRush
+    }
+    if (settings["cr-re"])
+    {
+        return current.mainMenuState == 6; // MainMenu.State.Levels
+    }
+    if (settings["ng-re"])
+    {
+        return current.mainMenuState == 1; // MainMenu.State.Main
+    }
 }
